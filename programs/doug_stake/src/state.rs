@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
+use solana_program::pubkey;
 use crate::errors;
+
+pub const TOKEN_MINT_PUBKEY: Pubkey = pubkey!("DougJh8Grcvyz8tZiMdWbT6BcYsnz59WXGc4dYfFE38K");
 
 pub const USER_VAULT_SEED: &[u8] = b"user_vault";
 pub const STAKE_ACCOUNT_SEED: &[u8] = b"stake_account";
@@ -8,7 +11,7 @@ pub const REWARD_VAULT_SEED: &[u8] = b"reward_vault";
 
 pub const DECIMALS_PER_TOKEN: u64 = 1000000;
 pub const STAKE_MINIMUM: u64 = 100 * DECIMALS_PER_TOKEN;
-pub const SECONDS_PER_DAY: u64 = 60; // 60 for test case only
+pub const SECONDS_PER_DAY: u64 = 86400; // 60 for test case only
 pub const DURATION_MIN: u64 = 14;
 pub const DURATION_MAX: u64 = 365;
 
@@ -34,12 +37,17 @@ pub struct StakeAccount {
 impl StakeAccount {
     pub fn stake(
         &mut self,
+        mint: Pubkey,
         owner: Pubkey,
         amount: u64,
         duration: u64,
         vault: Pubkey,
         vault_bump: u8
     ) -> Result<()> {
+        if mint != TOKEN_MINT_PUBKEY {
+            return Err(errors::ErrorCode::InvalidMint.into());
+        }
+
         if self.is_staked {
             return Err(errors::ErrorCode::AlreadyStaked.into());
         }
@@ -60,6 +68,32 @@ impl StakeAccount {
         self.duration = duration;
         self.unlockable_at = self.calculate_unlockable_at(duration).unwrap();
         self.is_staked = true;
+        Ok(())
+    }
+
+    pub fn top_up(&mut self, mint: Pubkey, amount: u64) -> Result<()> {
+        if mint != TOKEN_MINT_PUBKEY {
+            return Err(errors::ErrorCode::InvalidMint.into());
+        }
+
+        if !self.is_staked {
+            return Err(errors::ErrorCode::NotStaked.into());
+        }
+
+        if self.unlockable_at < Clock::get()?.unix_timestamp {
+            return Err(errors::ErrorCode::AlreadyUnlockable.into());
+        }
+
+        if amount < STAKE_MINIMUM {
+            return Err(errors::ErrorCode::AmountNotEnough.into());
+        }
+
+        let now = Clock::get()?.unix_timestamp;
+        let time_remaining = self.unlockable_at - now;
+        let rounded_days = (time_remaining / (SECONDS_PER_DAY as i64)) as u64;
+
+        self.amount += amount;
+        self.rewards = self.calculate_rewards(rounded_days);
         Ok(())
     }
 
@@ -124,7 +158,7 @@ impl StakeAccount {
     fn calculate_rewards(&self, duration: u64) -> u64 {
         let seconds_per_year = 86400 * 365;
         let unstake_time = 86400 * duration;
-        let multiplier = ((unstake_time as f64) / (seconds_per_year as f64)) * 3.0 + 1.0;
+        let multiplier = ((unstake_time as f64) / (seconds_per_year as f64)) * 1.0 + 1.0;
         let rewards = ((self.amount as f64) * multiplier).ceil();
         (rewards as u64) - self.amount
     }

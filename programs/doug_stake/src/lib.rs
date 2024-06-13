@@ -19,6 +19,10 @@ pub mod doug_stake {
         ctx.accounts.handler(amount, duration, ctx.bumps.user_vault)
     }
 
+    pub fn top_up(ctx: Context<TopUp>, amount: u64) -> Result<()> {
+        ctx.accounts.handler(amount)
+    }
+
     pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
         ctx.accounts.handler(ctx.bumps.user_vault, ctx.bumps.reward_vault)
     }

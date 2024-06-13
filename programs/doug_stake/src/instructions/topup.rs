@@ -6,7 +6,7 @@ use anchor_spl::{
 };
 
 #[derive(Accounts)]
-pub struct Stake<'info> {
+pub struct TopUp<'info> {
     #[account(
         mut,
         seeds = [VAULT_INFO_SEED],
@@ -15,21 +15,16 @@ pub struct Stake<'info> {
     pub vault_info: Box<Account<'info, VaultInfo>>,
 
     #[account(
-        init_if_needed,
+        mut,
         seeds = [USER_VAULT_SEED, user.key().as_ref()],
         bump,
-        payer = user,
-        token::mint = mint,
-        token::authority = user_vault
     )]
     pub user_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
-        init_if_needed,
+        mut,
         seeds = [STAKE_ACCOUNT_SEED, user.key().as_ref()],
         bump,
-        payer = user,
-        space = 8 + std::mem::size_of::<StakeAccount>()
     )]
     pub stake_account: Box<Account<'info, StakeAccount>>,
 
@@ -48,16 +43,9 @@ pub struct Stake<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> Stake<'info> {
-    pub fn handler(&mut self, amount: u64, duration: u64, vault_bump: u8) -> Result<()> {
-        self.stake_account.stake(
-            self.mint.key(),
-            self.user.key(),
-            amount,
-            duration,
-            self.user_vault.key(),
-            vault_bump
-        )?;
+impl<'info> TopUp<'info> {
+    pub fn handler(&mut self, amount: u64) -> Result<()> {
+        self.stake_account.top_up(self.mint.key(), amount)?;
 
         // Transfer the tokens from the user's wallet to their vault
         let cpi_context = CpiContext::new(self.token_program.to_account_info(), Transfer {

@@ -46,4 +46,7 @@ pub enum ErrorCode {
 
     #[msg("This stake does not belong to the authority.")]
     InvalidStakeAccount,
+
+    #[msg("Invalid mint.")]
+    InvalidMint,
 }
